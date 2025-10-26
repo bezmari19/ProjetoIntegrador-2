@@ -93,7 +93,7 @@ int main(void) {
     }
 
     // ===== NPC (controle) =====
-    float npc_x = 600, npc_y = 400;
+    float npc_x = 600, npc_y = 750;
     bool npc_visivel = false;            // inicia invisível - só aparece após resposta
     bool npc_falando = false;
     bool npc_som_tocado = false;
@@ -124,7 +124,7 @@ int main(void) {
     float x = 100, y = mode.height - 200;
     int fase_atual = 0;
     bool desafio_ativo = false, desafio_concluido = false;
-    Rect obstaculo_desafio = { 400,600, 70, 350 }; // (x, y, w, h) — ajuste se necessário
+    Rect obstaculo_desafio = { (float)mode.width - 100, 0, 100, (float)mode.height }; // (x, y, w, h) — ajuste se necessário
     bool resposta_certa = false;
     bool mostrar_pergunta = false;
 
@@ -232,10 +232,54 @@ int main(void) {
                 }
 
                 // limites da tela
-                if (x < 0) x = 0;
-                if (y < 0) y = 0;
-                if (al_get_bitmap_width(imagem) > 0 && x + al_get_bitmap_width(imagem) > mode.width) x = mode.width - al_get_bitmap_width(imagem);
-                if (al_get_bitmap_height(imagem) > 0 && y + al_get_bitmap_height(imagem) > mode.height) y = mode.height - al_get_bitmap_height(imagem);
+                // limites da tela E LÓGICA DE TRANSIÇÃO
+                int width = al_get_bitmap_width(imagem);
+                int height = al_get_bitmap_height(imagem);
+
+                if (x < 0) x = 0; // Limite da esquerda
+                if (y < 0) y = 0; // Limite de cima
+                if (y + height > mode.height) y = mode.height - height; // Limite de baixo
+
+                // --- LÓGICA DE TRANSIÇÃO (Substituindo o limite da direita) ---
+                if (x > mode.width) { // Se o jogador SAIU da tela pela direita...
+
+                    //... E estava na fase 1 E JÁ RESPONDEU...
+                    if (fase_atual == 1 && resposta_certa) {
+
+                        // Checa se o cenario 2 (índice 2) realmente existe
+                        if (cenarios[2]) {
+                            // 1. Fade out
+                            fade(janela, cenarios[fase_atual], mode.width, mode.height, true);
+
+                            // 2. Avança a fase (Puxa o "cenario3.png")
+                            fase_atual = 2;
+
+                            // 3. Teleporta o jogador para a esquerda
+                            x = 0;
+                            y = mode.height - 200; // Posição Y inicial (ajuste se precisar)
+                            resposta_certa = false; // Reseta o desafio para a nova fase
+                            mostrar_pergunta = false;
+                            npc_visivel = false;
+                            cenario_desafio_atual = cenario_fechado;
+
+                            // 4. Define um NOVO obstáculo para a Fase 2 (!! IMPORTANTE: Mude isso depois !!)
+                            Rect obstaculo_desafio = { (float)mode.width - 100, 0, 100, (float)mode.height };//obstaculo_desafio = (Rect){ 200, 300, 50, 400 }; // Exemplo
+
+                            // 5. Fade in com o novo cenário
+                            fade(janela, cenarios[fase_atual], mode.width, mode.height, false);
+                        }
+                        else {
+                            // Segurança: Se o cenario3.png não carregou, joga de volta
+                            x = mode.width - width;
+                        }
+                    }
+                    else {
+                        // Se ele saiu da tela mas NÃO era pra transitar (não acertou ou já está na fase 2)
+                        // só coloca ele de volta, como o limite antigo fazia.
+                        x = mode.width - width;
+                    }
+                }
+                // --- FIM DA MODIFICAÇÃO ---
 
                 // ===== DESAFIO: tratar resposta do usuário =====
                 if (mostrar_pergunta) {
@@ -251,7 +295,16 @@ int main(void) {
                         npc_falando = true;
                         npc_timer = 0;
                         npc_som_tocado = false;
-                        strcpy(npc_mensagem, "Excelente! Mandou bem!");
+                        // --- MENSAGEM CORRETA POR FASE ---
+                        if (fase_atual == 1) {
+                            strcpy(npc_mensagem, "Excelente! Mandou bem!");
+                        }
+                        else if (fase_atual == 2) {
+                            strcpy(npc_mensagem, "Tirou 10! HAHAHA");
+                        }
+                        else { // Caso tenha mais fases
+                            strcpy(npc_mensagem, "Excelente! Mandou bem!");
+                        }
                     }
                     else if (last_key >= ALLEGRO_KEY_0 && last_key <= ALLEGRO_KEY_9) {
                         // Resposta incorreta
@@ -263,7 +316,16 @@ int main(void) {
                         npc_falando = true;
                         npc_timer = 0;
                         npc_som_tocado = false;
-                        strcpy(npc_mensagem, "Hmm... quase! Tente outra vez!");
+                        // --- MENSAGEM INCORRETA POR FASE ---
+                        if (fase_atual == 1) {
+                            strcpy(npc_mensagem, "Esta nos slides!!");
+                        }
+                        else if (fase_atual == 2) {
+                            strcpy(npc_mensagem, "Ihhh, ta no jangal");
+                        }
+                        else { // Caso tenha mais fases
+                            strcpy(npc_mensagem, "Hmm... quase! Tente outra vez!");
+                        }
 
                         if (vidas <= 0) {
                             estado = GAME_OVER;
@@ -296,7 +358,7 @@ int main(void) {
                         al_get_bitmap_width(cenarios[0]), al_get_bitmap_height(cenarios[0]),
                         0, 0, mode.width, mode.height, 0);
                 }
-         
+
             }
             else if (estado == MOSTRAR_REGRAS) {
                 al_clear_to_color(al_map_rgb(40, 0, 0));
@@ -346,7 +408,7 @@ int main(void) {
                 );
 
                 // Desenha o personagem
-                //if (imagem) al_draw_bitmap(imagem, x, y, 0);
+                if (imagem) al_draw_bitmap(imagem, x, y, 0);
 
                 // Desenha NPC quando visível (com balão e mensagem dinâmica)
                 if (npc_visivel && img_npc) {
